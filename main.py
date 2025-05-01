@@ -142,12 +142,16 @@ async def process_text(text_data: TextData):
     metadata = []
     index = get_indices(all_chunks, metadata)
     D, I = index.search(query_vec, k=3)
-    results = ""
-    #print(f"\n🔍 Query: {query}\n\n📚 Top Matches:")
+    results = f"<div style='white-space: pre-line;'>"
+    results += f"<h3>🔍 Query: {query}</h3>"
+    results += f"<h4>📚 Top Matches:</h4>"
     for rank, idx in enumerate(I[0]):
         data = metadata[idx]
-        results += f"\n#{rank + 1}: From {data['doc_name']} [{data['chunk_id']}]\n"
-        results += f"\n→ {data['chunk']}\n\n"
+        results += f"<div style='margin: 20px 0; padding: 15px; background: #f5f5f5; border-radius: 5px;'>"
+        results += f"<strong>#{rank + 1}: From {data['doc_name']} [{data['chunk_id']}]</strong><br>"
+        results += f"<p style='margin-top: 10px;'>{data['chunk']}</p>"
+        results += "</div>"
+    results += "</div>"
     latest_content = {"type": "text", "content": results}
     return {"message": "Text received successfully"}
 
