@@ -9,6 +9,8 @@ venv
 *.doc
 *.docx
 __pycache__
+uploaded_files
+chrome_extension
 *.pyc
 *.pyo
 *.pyd
