@@ -7,6 +7,7 @@ import uvicorn
 import base64
 from pathlib import Path
 import os
+import json
 
 app = FastAPI()
 
@@ -98,6 +99,7 @@ async def root():
                 .content { max-width: 800px; margin: 0 auto; }
                 img { max-width: 100%; }
                 .message { padding: 20px; background: #f0f0f0; margin: 20px 0; border-radius: 5px; }
+                .highlight { background-color: yellow; }
             </style>
         </head>
         <body>
@@ -109,17 +111,25 @@ async def root():
             </div>
             <script>
                 function checkForUpdates() {
+                    console.log("Checking for updates...");  // Debug log
                     fetch('/get_latest')
                         .then(response => response.json())
                         .then(data => {
+                            console.log("Received data:", data);  // Debug log
                             const contentDiv = document.getElementById('content');
-                            if (data.type === 'text') {
-                                contentDiv.innerHTML = `<div class="message">${data.content}</div>`;
+                            if (data.type === 'text' && data.content) {
+                                console.log("Updating content with:", data.content);  // Debug log
+                                contentDiv.innerHTML = data.content;
                             } else if (data.type === 'image') {
                                 contentDiv.innerHTML = `<img src="${data.content}" alt="Uploaded image">`;
                             }
+                        })
+                        .catch(error => {
+                            console.error('Error checking for updates:', error);
                         });
                 }
+                
+                // Check for updates every second
                 setInterval(checkForUpdates, 1000);
             </script>
         </body>
@@ -136,24 +146,51 @@ async def get_latest():
 @app.post("/process_text")
 async def process_text(text_data: TextData):
     global latest_content
-    query = text_data.text
-    query_vec = get_embedding(query).reshape(1, -1)
-    all_chunks = []
-    metadata = []
-    index = get_indices(all_chunks, metadata)
-    D, I = index.search(query_vec, k=3)
-    results = f"<div style='white-space: pre-line;'>"
-    results += f"<h3>🔍 Query: {query}</h3>"
-    results += f"<h4>📚 Top Matches:</h4>"
-    for rank, idx in enumerate(I[0]):
-        data = metadata[idx]
-        results += f"<div style='margin: 20px 0; padding: 15px; background: #f5f5f5; border-radius: 5px;'>"
-        results += f"<strong>#{rank + 1}: From {data['doc_name']} [{data['chunk_id']}]</strong><br>"
-        results += f"<p style='margin-top: 10px;'>{data['chunk']}</p>"
-        results += "</div>"
-    results += "</div>"
-    latest_content = {"type": "text", "content": results}
-    return {"message": "Text received successfully"}
+    try:
+        print("Received text:", text_data.text)
+        query = text_data.text
+        index = faiss.read_index("chunk_index.faiss")
+        with open("metadata.json", "r", encoding="utf-8") as f:
+            metadata = json.load(f)
+        
+        query_vec = get_embedding(query).reshape(1, -1)
+        D, I = index.search(query_vec, k=1)
+        
+        best_match = metadata[I[0][0]]
+        print("Found match:", best_match)
+        
+        # Ensure URL has proper format
+        url = best_match['doc_name']
+        if not url.startswith(('http://', 'https://')):
+            url = 'https://' + url
+        
+        # Escape the text for JavaScript
+        text_to_highlight = best_match['chunk'].replace('\\', '\\\\').replace('`', '\\`').replace('${', '\\${')
+        
+        html_content = f"""
+        <div id="result-container">
+            <h3>Found matching content!</h3>
+            <div>
+                <strong>URL:</strong> <a href="{url}" target="_blank">{url}</a>
+            </div>
+            <div>
+                <strong>Text to highlight:</strong>
+                <div style="background: #f5f5f5; padding: 10px; margin: 10px 0;">
+                    {text_to_highlight}
+                </div>
+            </div>
+            <button onclick="window.open('{url}', '_blank')">Open URL in New Tab</button>
+        </div>
+        """
+        
+        latest_content = {
+            "type": "text",
+            "content": html_content
+        }
+        return {"message": "Text received successfully"}
+    except Exception as e:
+        print(f"Error in process_text: {str(e)}")
+        return {"message": f"Error processing text: {str(e)}"}
 
 @app.post("/process_image")
 async def process_image(file: UploadFile = File(...)):
