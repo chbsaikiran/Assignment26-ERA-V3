@@ -14,6 +14,12 @@
         }
         .search-container {
             margin: 20px 0;
+            position: sticky;
+            top: 0;
+            background: white;
+            padding: 10px 0;
+            z-index: 100;
+            border-bottom: 1px solid #eee;
         }
         #searchInput {
             width: 70%;
@@ -41,6 +47,18 @@
             display: none;
             margin: 20px 0;
         }
+        mark {
+            background-color: yellow;
+            scroll-margin-top: 150px;
+            padding: 2px 0;
+        }
+        .highlight-container {
+            padding: 20px;
+            border: 2px solid #ffd700;
+            margin: 10px 0;
+            background-color: #fffef0;
+            border-radius: 5px;
+        }
     </style>
 </head>
 <body>
@@ -56,6 +74,27 @@
     <div id="results"></div>
 
     <script>
+        function scrollToHighlight() {
+            const highlightedElement = document.querySelector('mark');
+            if (highlightedElement) {
+                // Create a container around the highlighted text
+                const container = document.createElement('div');
+                container.className = 'highlight-container';
+                highlightedElement.parentNode.insertBefore(container, highlightedElement);
+                container.appendChild(highlightedElement);
+
+                // Calculate position
+                const rect = highlightedElement.getBoundingClientRect();
+                const absoluteTop = window.pageYOffset + rect.top - 150; // Adjust for header
+
+                // Scroll to position
+                window.scrollTo({
+                    top: absoluteTop,
+                    behavior: 'smooth'
+                });
+            }
+        }
+
         document.getElementById('searchButton').addEventListener('click', async () => {
             const query = document.getElementById('searchInput').value;
             if (!query) return;
@@ -81,6 +120,12 @@
 
                 const html = await response.text();
                 results.innerHTML = html;
+
+                // Wait for content to be fully rendered
+                requestAnimationFrame(() => {
+                    setTimeout(scrollToHighlight, 300);
+                });
+
             } catch (error) {
                 results.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
             } finally {
