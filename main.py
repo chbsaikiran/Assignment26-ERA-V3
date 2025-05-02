@@ -1,6 +1,8 @@
 from fastapi import FastAPI, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from typing import Optional
 import uvicorn
@@ -8,6 +10,9 @@ import base64
 from pathlib import Path
 import os
 import json
+import requests
+import re
+from bs4 import BeautifulSoup
 
 app = FastAPI()
 
@@ -20,9 +25,14 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
-# Create a directory to store uploaded images
+# Create directories for uploads and static files
 UPLOAD_DIR = Path("uploaded_files")
+STATIC_DIR = Path("static")
 UPLOAD_DIR.mkdir(exist_ok=True)
+STATIC_DIR.mkdir(exist_ok=True)
+
+# Mount static files directory
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 import os
 from pathlib import Path
@@ -88,56 +98,13 @@ def get_indices(all_chunks, metadata):
 class TextData(BaseModel):
     text: str
 
-@app.get("/")
-async def root():
-    return HTMLResponse(content="""
-    <html>
-        <head>
-            <title>FastAPI Server</title>
-            <style>
-                body { font-family: Arial, sans-serif; margin: 40px; }
-                .content { max-width: 800px; margin: 0 auto; }
-                img { max-width: 100%; }
-                .message { padding: 20px; background: #f0f0f0; margin: 20px 0; border-radius: 5px; }
-                .highlight { background-color: yellow; }
-            </style>
-        </head>
-        <body>
-            <div class="content">
-                <h1>FastAPI Server</h1>
-                <div id="content">
-                    <p>Waiting for content from Chrome extension...</p>
-                </div>
-            </div>
-            <script>
-                function checkForUpdates() {
-                    console.log("Checking for updates...");  // Debug log
-                    fetch('/get_latest')
-                        .then(response => response.json())
-                        .then(data => {
-                            console.log("Received data:", data);  // Debug log
-                            const contentDiv = document.getElementById('content');
-                            if (data.type === 'text' && data.content) {
-                                console.log("Updating content with:", data.content);  // Debug log
-                                contentDiv.innerHTML = data.content;
-                            } else if (data.type === 'image') {
-                                contentDiv.innerHTML = `<img src="${data.content}" alt="Uploaded image">`;
-                            }
-                        })
-                        .catch(error => {
-                            console.error('Error checking for updates:', error);
-                        });
-                }
-                
-                // Check for updates every second
-                setInterval(checkForUpdates, 1000);
-            </script>
-        </body>
-    </html>
-    """)
-
 # Store the latest content
 latest_content = {"type": None, "content": None}
+
+@app.get("/", response_class=HTMLResponse)
+async def root():
+    with open("static/index.html", "r", encoding="utf-8") as f:
+        return f.read()
 
 @app.get("/get_latest")
 async def get_latest():
@@ -164,30 +131,26 @@ async def process_text(text_data: TextData):
         if not url.startswith(('http://', 'https://')):
             url = 'https://' + url
         
-        # Escape the text for JavaScript
-        text_to_highlight = best_match['chunk'].replace('\\', '\\\\').replace('`', '\\`').replace('${', '\\${')
+        # Fetch the webpage content
+        response = requests.get(url)
+        response.raise_for_status()
+        html_content = response.text
         
-        html_content = f"""
-        <div id="result-container">
-            <h3>Found matching content!</h3>
-            <div>
-                <strong>URL:</strong> <a href="{url}" target="_blank">{url}</a>
-            </div>
-            <div>
-                <strong>Text to highlight:</strong>
-                <div style="background: #f5f5f5; padding: 10px; margin: 10px 0;">
-                    {text_to_highlight}
-                </div>
-            </div>
-            <button onclick="window.open('{url}', '_blank')">Open URL in New Tab</button>
-        </div>
-        """
+        # Parse HTML
+        soup = BeautifulSoup(html_content, 'html.parser')
         
-        latest_content = {
-            "type": "text",
-            "content": html_content
-        }
-        return {"message": "Text received successfully"}
+        # Find the first occurrence of the text
+        text_to_find = best_match['chunk'].replace('\\', '\\\\').replace('`', '\\`').replace('${', '\\${')
+        pattern = re.compile(f'({text_to_find})', re.IGNORECASE)
+        
+        # Function to wrap text with highlight
+        def highlight_match(text):
+            return f'<mark style="background-color: yellow;">{text.group(1)}</mark>'
+        
+        # Replace first occurrence with highlighted version
+        modified_html = pattern.sub(highlight_match, str(soup), count=1)
+        
+        return HTMLResponse(content=modified_html, status_code=200)
     except Exception as e:
         print(f"Error in process_text: {str(e)}")
         return {"message": f"Error processing text: {str(e)}"}

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Semantic Search</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .search-container {
+            margin: 20px 0;
+        }
+        #searchInput {
+            width: 70%;
+            padding: 10px;
+            font-size: 16px;
+        }
+        #searchButton {
+            padding: 10px 20px;
+            font-size: 16px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        #searchButton:hover {
+            background-color: #45a049;
+        }
+        #results {
+            margin-top: 20px;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .loading {
+            display: none;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Semantic Search</h1>
+    
+    <div class="search-container">
+        <input type="text" id="searchInput" placeholder="Enter your search query...">
+        <button id="searchButton">Search</button>
+    </div>
+
+    <div class="loading" id="loading">Searching...</div>
+    
+    <div id="results"></div>
+
+    <script>
+        document.getElementById('searchButton').addEventListener('click', async () => {
+            const query = document.getElementById('searchInput').value;
+            if (!query) return;
+
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            
+            loading.style.display = 'block';
+            results.innerHTML = '';
+
+            try {
+                const response = await fetch('/process_text', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ text: query })
+                });
+
+                if (!response.ok) {
+                    throw new Error('Search failed');
+                }
+
+                const html = await response.text();
+                results.innerHTML = html;
+            } catch (error) {
+                results.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+            } finally {
+                loading.style.display = 'none';
+            }
+        });
+
+        // Also trigger search on Enter key
+        document.getElementById('searchInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                document.getElementById('searchButton').click();
+            }
+        });
+    </script>
+</body>
+</html> 
