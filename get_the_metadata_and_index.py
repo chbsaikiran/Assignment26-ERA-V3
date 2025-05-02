@@ -80,11 +80,8 @@ def generate_metadata(url, model):
         #         idx += 1
 
         # Save metadata to file
-        output_file = "metadata.json"
-        with open(output_file, "w", encoding='utf-8') as f:
-            json.dump(metadata, f, indent=2, ensure_ascii=False)
 
-        print(f"Metadata saved to {output_file} with {len(metadata)} entries.")
+        print(f"Metadata with {len(metadata)} entries.")
         return metadata
     except Exception as e:
         print(f"Error in generate_metadata: {str(e)}")
@@ -164,27 +161,48 @@ def main():
         url = "https://economictimes.indiatimes.com/tech/catalysts/how-data-ai-tech-and-quantum-computing-are-shaping-the-future-of-work/articleshow/111078862.cms"
         
         # Generate metadata
-        metadata = generate_metadata(url, model)
+        metadata1 = generate_metadata(url, model)
         #with open("metadata.json", "w", encoding="utf-8") as f:
         #    json.dump(metadata, f, indent=2, ensure_ascii=False)
 
-        if metadata:
+        if metadata1:
             print("Processing completed successfully!")
         else:
             print("Failed to process the URL.")
 
-        text_chunks = [entry['chunk'] for entry in metadata if not entry['chunk'].startswith('[IMAGE]')]
+        text_chunks = [entry['chunk'] for entry in metadata1 if not entry['chunk'].startswith('[IMAGE]')]
 
         all_chunks = []
 
         for chunk in text_chunks:
             all_chunks.append(get_embedding(chunk))
-        # Build FAISS index
+
+        url = "https://economictimes.indiatimes.com/tech/catalysts/gen-beta-watch-out-ai-poised-to-take-a-big-leap-in-2025/articleshow/117270631.cms"
+        
+        # Generate metadata
+        metadata2 = generate_metadata(url, model)
+        #with open("metadata.json", "w", encoding="utf-8") as f:
+        #    json.dump(metadata, f, indent=2, ensure_ascii=False)
+
+        if metadata2:
+            print("Processing completed successfully!")
+        else:
+            print("Failed to process the URL.")
+
+        text_chunks = [entry['chunk'] for entry in metadata2 if not entry['chunk'].startswith('[IMAGE]')]
+        for chunk in text_chunks:
+            all_chunks.append(get_embedding(chunk))
+        # Save FAISS index
         dimension = len(all_chunks[0])
         index = faiss.IndexFlatL2(dimension)
         index.add(np.stack(all_chunks))
         # Save FAISS index
         faiss.write_index(index, "chunk_index.faiss")
+            
+        metadata = metadata1 + metadata2
+        output_file = "metadata.json"
+        with open(output_file, "w", encoding='utf-8') as f:
+            json.dump(metadata, f, indent=2, ensure_ascii=False)
             
     except Exception as e:
         print(f"Error in main: {str(e)}")
